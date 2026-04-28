@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NWS Weather Dashboard</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --danger: #e74c3c;
+            --bg: #f4f7f6;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: var(--bg); }
+        header { background: var(--primary); color: white; padding: 1rem; text-align: center; }
+
+        /* Tab Navigation */
+        .tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ddd; justify-content: center; }
+        .tab-btn { 
+            padding: 15px 25px; cursor: pointer; border: none; background: none; 
+            font-weight: bold; color: #555; transition: 0.3s;
+        }
+        .tab-btn.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
+
+        /* Content Areas */
+        .tab-content { display: none; padding: 20px; max-width: 1200px; margin: auto; }
+        .tab-content.active { display: block; }
+
+        /* Weather Cards */
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .alert-item { border-left: 5px solid var(--danger); background: #fff5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        
+        .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .data-point { text-align: center; padding: 20px; background: #fff; border-radius: 8px; border: 1px solid #eee; }
+        .data-point h3 { margin: 0; color: #777; font-size: 0.9rem; }
+        .data-point p { font-size: 1.5rem; font-weight: bold; margin: 10px 0 0 0; }
+
+        /* Radar Map */
+        #map { height: 70vh; width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>NWS Weather Command</h1>
+    <p id="location-label">Loading location...</p>
+</header>
+
+<nav class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('quick')">Quick Display</button>
+    <button class="tab-btn" onclick="showTab('forecast')">Forecasts</button>
+    <button class="tab-btn" onclick="showTab('data')">Data</button>
+    <button class="tab-btn" onclick="showTab('radar')">Radar</button>
+</nav>
+
+<div id="quick" class="tab-content active">
+    <h2>Active Advisories & Warnings</h2>
+    <div id="alerts-list">Checking for active weather statements...</div>
+</div>
+
+<div id="forecast" class="tab-content">
+    <h2>7-Day Outlook</h2>
+    <div id="forecast-grid" class="data-grid"></div>
+</div>
+
+<div id="data" class="tab-content">
+    <h2>Current Observations</h2>
+    <div class="data-grid">
+        <div class="data-point"><h3>Temperature</h3><p id="obs-temp">--</p></div>
+        <div class="data-point"><h3>Barometric Pressure</h3><p id="obs-pressure">--</p></div>
+        <div class="data-point"><h3>Humidity</h3><p id="obs-humidity">--</p></div>
+        <div class="data-point"><h3>Wind Speed</h3><p id="obs-wind">--</p></div>
+    </div>
+</div>
+
+<div id="radar" class="tab-content">
+    <div id="map"></div>
+    <p style="text-align: center; color: #666; margin-top: 10px;">Click anywhere on the map to zoom in seamlessly.</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Configuration
+    const LAT = 38.89; // Default: DC
+    const LON = -77.03;
+    const USER_AGENT = "MyWeatherApp/1.0 (contact@example.com)";
+
+    // Tab Switching Logic
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+        
+        // Refresh Map if radar tab is opened
+        if(tabId === 'radar') { setTimeout(() => { map.invalidateSize(); }, 200); }
+    }
+
+    // Initialize Radar Map
+    const map = L.map('map').setView([LAT, LON], 4);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Add NWS Radar WMS Layer
+    const radarLayer = L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/wms", {
+        layers: 'conus_bref_qcd',
+        format: 'image/png',
+        transparent: true,
+        opacity: 0.7,
+        attribution: "NOAA/NWS"
+    }).addTo(map);
+
+    // Seamless Zoom on Click
+    map.on('click', function(e) {
+        map.flyTo(e.latlng, 9, { animate: true, duration: 1.5 });
+    });
+
+    // Fetch Weather Data
+    async function initWeather() {
+        try {
+            // 1. Get Point Data
+            const pointRes = await fetch(`https://api.weather.gov/points/${LAT},${LON}`, { headers: { "User-Agent": USER_AGENT } });
+            const pointData = await pointRes.json();
+            const forecastUrl = pointData.properties.forecast;
+            const observationUrl = pointData.properties.observationStations;
+            
+            document.getElementById('location-label').innerText = `Displaying data for: ${pointData.properties.relativeLocation.properties.city}, ${pointData.properties.relativeLocation.properties.state}`;
+
+            // 2. Fetch Forecast
+            const forecastRes = await fetch(forecastUrl, { headers: { "User-Agent": USER_AGENT } });
+            const forecastData = await forecastRes.json();
+            displayForecast(forecastData.properties.periods);
+
+            // 3. Fetch Observations (Latest)
+            const stationRes = await fetch(observationUrl, { headers: { "User-Agent": USER_AGENT } });
+            const stationData = await stationRes.json();
+            const latestObsRes = await fetch(`${stationData.features[0].id}/observations/latest`, { headers: { "User-Agent": USER_AGENT } });
+            const obsData = await latestObsRes.json();
+            displayObservations(obsData.properties);
+
+            // 4. Fetch Active Alerts
+            fetchAlerts();
+
+        } catch (err) {
+            console.error("Error fetching NWS data:", err);
+        }
+    }
+
+    function displayForecast(periods) {
+        const grid = document.getElementById('forecast-grid');
+        grid.innerHTML = periods.slice(0, 7).map(p => `
+            <div class="card">
+                <h3>${p.name}</h3>
+                <p><strong>${p.temperature}°${p.temperatureUnit}</strong></p>
+                <p style="font-size: 0.8rem;">${p.shortForecast}</p>
+            </div>
+        `).join('');
+    }
+
+    function displayObservations(props) {
+        // Temperature conversion (Celsius to Fahrenheit)
+        const tempF = (props.temperature.value * 9/5) + 32;
+        // Pressure conversion (Pascal to inHg)
+        const presIn = props.barometricPressure.value * 0.0002953;
+
+        document.getElementById('obs-temp').innerText = `${tempF.toFixed(1)}°F`;
+        document.getElementById('obs-pressure').innerText = `${presIn.toFixed(2)} inHg`;
+        document.getElementById('obs-humidity').innerText = `${props.relativeHumidity.value.toFixed(0)}%`;
+        document.getElementById('obs-wind').innerText = `${props.windSpeed.value.toFixed(1)} km/h`;
+    }
+
+    async function fetchAlerts() {
+        const res = await fetch(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`, { headers: { "User-Agent": USER_AGENT } });
+        const data = await res.json();
+        const list = document.getElementById('alerts-list');
+        
+        if (data.features.length === 0) {
+            list.innerHTML = "<p>No active warnings or advisories for this area.</p>";
+        } else {
+            list.innerHTML = data.features.map(f => `
+                <div class="alert-item">
+                    <strong>${f.properties.event}</strong><br>
+                    <small>${f.properties.headline}</small>
+                </div>
+            `).join('');
+        }
+    }
+
+    initWeather();
+</script>
+
+</body>
+</html>
