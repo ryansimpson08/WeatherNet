@@ -3,142 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced NWS Weather Hub</title>
+    <title>NWS Pro Dashboard</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
         :root {
-            --primary: #1a2a3a;
-            --accent: #00d2ff;
-            --danger: #ff4d4d;
-            --card-bg: #ffffff;
+            --primary: #0a192f;
+            --accent: #64ffda;
+            --warning-red: #ff4d4d;
+            --warning-orange: #ffa500;
+            --bg: #f0f2f5;
         }
 
-        body { font-family: 'Inter', sans-serif; margin: 0; background: #eceff1; color: #333; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; background: var(--bg); color: #333; }
         
-        /* Search & Header */
-        header { background: var(--primary); color: white; padding: 20px; text-align: center; }
-        .search-container { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
-        input[type="text"] { padding: 10px; border-radius: 20px; border: none; width: 250px; outline: none; }
-        button.search-btn { padding: 10px 20px; border-radius: 20px; border: none; background: var(--accent); cursor: pointer; font-weight: bold; }
+        /* Header & Search */
+        header { background: var(--primary); color: white; padding: 25px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .search-box { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
+        input { padding: 12px 20px; border-radius: 25px; border: none; width: 300px; font-size: 1rem; }
+        .btn { padding: 12px 25px; border-radius: 25px; border: none; background: var(--accent); color: var(--primary); font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn:hover { transform: scale(1.05); filter: brightness(1.1); }
 
-        /* Tabs */
-        .tab-bar { display: flex; background: white; border-bottom: 1px solid #ccc; justify-content: center; position: sticky; top: 0; z-index: 1000; }
-        .tab-btn { padding: 15px 30px; cursor: pointer; border: none; background: none; font-weight: 600; color: #666; }
-        .tab-btn.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
+        /* Navigation */
+        nav { display: flex; background: white; justify-content: center; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 1000; }
+        .tab-link { padding: 18px 30px; cursor: pointer; font-weight: 600; color: #555; border: none; background: none; border-bottom: 3px solid transparent; }
+        .tab-link.active { color: var(--primary); border-bottom-color: var(--accent); }
 
-        .tab-content { display: none; padding: 25px; max-width: 1200px; margin: auto; }
-        .tab-content.active { display: block; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        .view { display: none; animation: fadeIn 0.4s; }
+        .view.active { display: block; }
 
-        /* Forecast - Horizontal Style */
-        .forecast-scroll { 
-            display: flex; 
-            overflow-x: auto; 
-            gap: 15px; 
-            padding: 10px 0;
-            scrollbar-width: thin;
-        }
-        .forecast-card { 
-            min-width: 160px; 
-            background: white; 
-            padding: 15px; 
-            border-radius: 12px; 
-            text-align: center; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .forecast-card img { width: 60px; height: 60px; margin: 10px 0; border-radius: 50%; border: 2px solid #f0f0f0; }
-
-        /* Data Grid */
-        .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
-        .data-point { background: white; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #ddd; }
-
-        /* Radar Map */
-        #map { height: 75vh; width: 100%; border-radius: 12px; }
-        .info-panel { background: white; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem; text-align: center; color: #555; }
+        /* Forecast & Data Styles */
+        .forecast-row { display: flex; overflow-x: auto; gap: 15px; padding-bottom: 15px; scrollbar-width: thin; }
+        .forecast-card { min-width: 150px; background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .forecast-card img { width: 50px; height: 50px; }
         
-        .alert-box { background: #fff1f1; border-left: 5px solid var(--danger); padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+        .data-card { background: white; padding: 30px; border-radius: 15px; text-align: center; border-top: 5px solid var(--accent); }
+        .data-card h3 { margin: 0; color: #777; font-size: 0.9rem; text-transform: uppercase; }
+        .data-card p { font-size: 1.8rem; font-weight: bold; margin: 10px 0 0; }
+
+        /* Alerts */
+        .alert-pill { padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; flex-direction: column; }
+        .alert-Extreme { background: #fee2e2; border-left: 6px solid #dc2626; color: #991b1b; }
+        .alert-Severe { background: #ffedd5; border-left: 6px solid #ea580c; color: #9a3412; }
+        .alert-Moderate { background: #fef9c3; border-left: 6px solid #ca8a04; color: #854d0e; }
+
+        #map { height: 70vh; width: 100%; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>NWS Weather Command</h1>
-    <div class="search-container">
-        <input type="text" id="location-input" placeholder="Enter City or Zip (e.g. Dallas, TX)">
-        <button class="search-btn" onclick="searchLocation()">Search</button>
+    <h1>Weather Command Center</h1>
+    <div class="search-box">
+        <input type="text" id="locInput" placeholder="City, State or Zip Code...">
+        <button class="btn" onclick="handleSearch()">Update Dashboard</button>
     </div>
-    <p id="location-display" style="margin-top: 15px; opacity: 0.8;">Loading current location...</p>
+    <p id="station-info" style="margin-top: 15px; font-weight: 300;"></p>
 </header>
 
-<nav class="tab-bar">
-    <button class="tab-btn active" onclick="showTab('quick')">Quick Display</button>
-    <button class="tab-btn" onclick="showTab('forecast')">Forecasts</button>
-    <button class="tab-btn" onclick="showTab('data')">Data</button>
-    <button class="tab-btn" onclick="showTab('radar')">Radar</button>
+<nav>
+    <button class="tab-link active" onclick="switchTab('quick')">Quick Display</button>
+    <button class="tab-link" onclick="switchTab('forecast')">Forecasts</button>
+    <button class="tab-link" onclick="switchTab('data')">Data</button>
+    <button class="tab-link" onclick="switchTab('radar')">Interactive Radar</button>
 </nav>
 
-<div id="quick" class="tab-content active">
-    <h3>Active Warnings & Advisories</h3>
-    <div id="alerts-container">Scanning for NWS alerts...</div>
-</div>
-
-<div id="forecast" class="tab-content">
-    <h3>7-Day Outlook (Day & Night)</h3>
-    <div class="forecast-scroll" id="forecast-container"></div>
-</div>
-
-<div id="data" class="tab-content">
-    <h3>Technical Data Points</h3>
-    <div class="data-grid">
-        <div class="data-point"><h4>Temp</h4><p id="d-temp">--</p></div>
-        <div class="data-point"><h4>Barometric</h4><p id="d-baro">--</p></div>
-        <div class="data-point"><h4>Humidity</h4><p id="d-hum">--</p></div>
-        <div class="data-point"><h4>Wind</h4><p id="d-wind">--</p></div>
+<div class="container">
+    <div id="quick" class="view active">
+        <h2>Live Weather Advisories</h2>
+        <div id="alerts-output">Loading local alerts...</div>
     </div>
-</div>
 
-<div id="radar" class="tab-content">
-    <div id="map"></div>
-    <div class="info-panel">Click on a state to highlight it and zoom in on live radar.</div>
+    <div id="forecast" class="view">
+        <h2>7-Day Hourly/Daily View</h2>
+        <div class="forecast-row" id="forecast-output"></div>
+    </div>
+
+    <div id="data" class="view">
+        <h2>Live Station Observations</h2>
+        <div class="data-grid">
+            <div class="data-card"><h3>Temperature</h3><p id="v-temp">--</p></div>
+            <div id="pressure-card" class="data-card"><h3>Barometric</h3><p id="v-baro">--</p></div>
+            <div class="data-card"><h3>Humidity</h3><p id="v-hum">--</p></div>
+            <div class="data-card"><h3>Wind Velocity</h3><p id="v-wind">--</p></div>
+        </div>
+    </div>
+
+    <div id="radar" class="view">
+        <div id="map"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-    let currentLat = 38.89, currentLon = -77.03; 
-    let map, stateLayer;
-    const USER_AGENT = "WeatherDashboardProject/1.0 (contact@example.com)";
+    let map, radarLayer, warningsLayer, stateLayer;
+    let curLat = 34.4, curLon = -86.9; // Default: Alabama area
+    const UA = "NWS_Interactive_Dash/2.0 (edu.project@weather.com)";
 
-    function showTab(id) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-        event.currentTarget.classList.add('active');
-        if(id === 'radar') setTimeout(() => map.invalidateSize(), 100);
-    }
-
-    // MAP SETUP
+    // INITIALIZE MAP
     function initMap() {
         map = L.map('map').setView([37.8, -96], 4);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
-
-        // NWS Radar Overlay
-        L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/wms", {
-            layers: 'conus_bref_qcd', format: 'image/png', transparent: true, opacity: 0.6
+        
+        const base = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
-        // Load US States for highlighting
+        // NWS Radar Layer
+        radarLayer = L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/wms", {
+            layers: 'conus_bref_qcd', format: 'image/png', transparent: true, opacity: 0.6
+        });
+
+        // Warnings Polygon Layer (GeoJSON)
+        warningsLayer = L.layerGroup();
+
+        // Control Toggles
+        const overlays = {
+            "Live Radar": radarLayer.addTo(map),
+            "Warning Areas": warningsLayer.addTo(map)
+        };
+        L.control.layers(null, overlays).addTo(map);
+
+        // Load State Boundaries
         fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
-            .then(res => res.json())
-            .then(data => {
+            .then(r => r.json()).then(data => {
                 stateLayer = L.geoJson(data, {
-                    style: { color: '#333', weight: 1, fillOpacity: 0.1 },
-                    onEachFeature: (feature, layer) => {
-                        layer.on('click', (e) => {
-                            stateLayer.setStyle({ fillOpacity: 0.1, color: '#333' }); // Reset others
-                            layer.setStyle({ fillOpacity: 0.3, color: '#00d2ff', weight: 3 }); // Highlight
-                            map.fitBounds(layer.getBounds());
+                    style: { color: '#ffffff', weight: 1, fillOpacity: 0.05 },
+                    onEachFeature: (f, l) => {
+                        l.on('click', (e) => {
+                            map.fitBounds(l.getBounds());
                             L.DomEvent.stopPropagation(e);
                         });
                     }
@@ -146,86 +144,83 @@
             });
     }
 
-    // SEARCH FUNCTIONALITY
-    async function searchLocation() {
-        const query = document.getElementById('location-input').value;
-        if (!query) return;
+    async function handleSearch() {
+        const query = document.getElementById('locInput').value;
+        if(!query) return;
         
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=us`);
-        const results = await res.json();
-        
-        if (results.length > 0) {
-            currentLat = results[0].lat;
-            currentLon = results[0].lon;
-            map.flyTo([currentLat, currentLon], 8);
-            updateWeather();
-        } else {
-            alert("Area not found. Please try a different city or state.");
+        const data = await res.json();
+        if(data.length > 0) {
+            curLat = data[0].lat;
+            curLon = data[0].lon;
+            map.flyTo([curLat, curLon], 9);
+            refreshAllData();
         }
     }
 
-    // NWS DATA FETCHING
-    async function updateWeather() {
+    async function refreshAllData() {
         try {
-            const pointRes = await fetch(`https://api.weather.gov/points/${currentLat},${currentLon}`, { headers: { "User-Agent": USER_AGENT } });
-            const points = await pointRes.json();
+            const pointReq = await fetch(`https://api.weather.gov/points/${curLat},${curLon}`, { headers: {"User-Agent": UA} });
+            const points = await pointReq.json();
             
-            document.getElementById('location-display').innerText = `Reporting from: ${points.properties.relativeLocation.properties.city}, ${points.properties.relativeLocation.properties.state}`;
+            document.getElementById('station-info').innerText = `Reporting for: ${points.properties.relativeLocation.properties.city}, ${points.properties.relativeLocation.properties.state}`;
 
-            // Forecasts
-            const fRes = await fetch(points.properties.forecast, { headers: { "User-Agent": USER_AGENT } });
-            const fData = await fRes.json();
-            renderForecast(fData.properties.periods);
+            updateForecast(points.properties.forecast);
+            updateObservations(points.properties.observationStations);
+            updateAlerts(curLat, curLon);
+            updateMapWarnings(); // Refresh polygons on map
 
-            // Observations
-            const sRes = await fetch(points.properties.observationStations, { headers: { "User-Agent": USER_AGENT } });
-            const sData = await sRes.json();
-            const latestRes = await fetch(`${sData.features[0].id}/observations/latest`, { headers: { "User-Agent": USER_AGENT } });
-            const obs = await latestRes.json();
-            renderObservations(obs.properties);
-
-            // Alerts
-            fetchAlerts(currentLat, currentLon);
-
-        } catch (e) { console.error(e); }
+        } catch(e) { console.error("NWS API Error:", e); }
     }
 
-    function renderForecast(periods) {
-        const container = document.getElementById('forecast-container');
-        container.innerHTML = periods.map(p => `
+    async function updateForecast(url) {
+        const res = await fetch(url, { headers: {"User-Agent": UA} });
+        const data = await res.json();
+        const container = document.getElementById('forecast-output');
+        container.innerHTML = data.properties.periods.map(p => `
             <div class="forecast-card">
-                <div style="font-size: 0.8rem; font-weight: bold; color: #777;">${p.name}</div>
-                <img src="${p.icon}" alt="weather">
-                <div style="font-size: 1.2rem; font-weight: bold;">${p.temperature}°${p.temperatureUnit}</div>
-                <div style="font-size: 0.7rem; margin-top: 5px;">${p.shortForecast}</div>
+                <div style="font-size: 0.75rem; color: #888;">${p.name}</div>
+                <img src="${p.icon}" alt="icon">
+                <div style="font-size: 1.3rem; font-weight: bold;">${p.temperature}°${p.temperatureUnit}</div>
+                <div style="font-size: 0.7rem;">${p.shortForecast}</div>
             </div>
         `).join('');
     }
 
-    function renderObservations(p) {
-        const tempF = (p.temperature.value * 9/5) + 32;
-        const baroIn = p.barometricPressure.value * 0.0002953;
-        document.getElementById('d-temp').innerText = `${tempF.toFixed(1)}°F`;
-        document.getElementById('d-baro').innerText = `${baroIn.toFixed(2)} inHg`;
-        document.getElementById('d-hum').innerText = `${p.relativeHumidity.value.toFixed(0)}%`;
-        document.getElementById('d-wind').innerText = `${p.windSpeed.value.toFixed(1)} km/h`;
-    }
-
-    async function fetchAlerts(lat, lon) {
-        const res = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lon}`, { headers: { "User-Agent": USER_AGENT } });
+    async function updateObservations(stationsUrl) {
+        const res = await fetch(stationsUrl, { headers: {"User-Agent": UA} });
         const data = await res.json();
-        const container = document.getElementById('alerts-container');
-        container.innerHTML = data.features.length ? data.features.map(f => `
-            <div class="alert-box">
-                <strong>${f.properties.event}</strong><br>
-                <small>${f.properties.headline}</small>
-            </div>
-        `).join('') : "No active alerts for this location.";
+        
+        // Try the first 3 stations in case one is down
+        for(let i=0; i < 3; i++) {
+            const obsRes = await fetch(`${data.features[i].id}/observations/latest`, { headers: {"User-Agent": UA} });
+            const obs = await obsRes.json();
+            const p = obs.properties;
+            
+            if(p.temperature.value !== null) {
+                const tempF = (p.temperature.value * 9/5) + 32;
+                const baroIn = p.barometricPressure.value ? (p.barometricPressure.value * 0.0002953).toFixed(2) : "N/A";
+                
+                document.getElementById('v-temp').innerText = `${tempF.toFixed(1)}°F`;
+                document.getElementById('v-baro').innerText = baroIn !== "N/A" ? `${baroIn} inHg` : "No Data";
+                document.getElementById('v-hum').innerText = p.relativeHumidity.value ? `${p.relativeHumidity.value.toFixed(0)}%` : "--";
+                document.getElementById('v-wind').innerText = p.windSpeed.value ? `${p.windSpeed.value.toFixed(1)} mph` : "Calm";
+                break;
+            }
+        }
     }
 
-    initMap();
-    updateWeather();
-</script>
+    async function updateAlerts(lat, lon) {
+        const res = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lon}`, { headers: {"User-Agent": UA} });
+        const data = await res.json();
+        const output = document.getElementById('alerts-output');
+        
+        output.innerHTML = data.features.length ? data.features.map(a => `
+            <div class="alert-pill alert-${a.properties.severity}">
+                <span style="font-weight: bold; font-size: 1.1rem;">${a.properties.event}</span>
+                <span style="font-size: 0.85rem;">${a.properties.headline}</span>
+            </div>
+        `).join('') : "<p>No active alerts for this location.</p>";
+    }
 
-</body>
-</html>
+    // MAP WARNINGS (POLYGONS)
