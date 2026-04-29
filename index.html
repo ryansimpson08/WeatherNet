@@ -3,277 +3,386 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NWS Weather Command v3.0</title>
+    <title>WeatherNet | Command Center v26</title>
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Orbitron:wght@800&family=JetBrains+Mono:wght@500&display=swap');
+
+        * { box-sizing: border-box; }
+        
         :root {
-            --primary: #0f172a;
-            --accent: #38bdf8;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --accent: #4d7cff;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --warning: #facc15;
             --danger: #ef4444;
-            --card: #ffffff;
+            --nav-height: 64px;
+            --loc-height: 35px;
+            --nws-tornado: #ff0033;
+            --nws-severe-tstorm: #ffcc00;
+            --nws-flood: #00ff66;
         }
 
-        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background: #f1f5f9; color: #1e293b; overflow-x: hidden; }
-        
-        /* Header & Search */
-        header { background: var(--primary); color: white; padding: 2rem 1rem; text-align: center; }
-        .search-container { max-width: 500px; margin: 15px auto; display: flex; gap: 8px; }
-        input { flex: 1; padding: 12px 20px; border-radius: 8px; border: none; font-size: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        .btn-search { background: var(--accent); color: var(--primary); border: none; padding: 0 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        body, html { 
+            margin: 0; padding: 0; height: 100vh; width: 100vw; 
+            font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); 
+            overflow: hidden; display: flex; flex-direction: column;
+        }
 
-        /* Navigation */
-        nav { display: flex; background: white; border-bottom: 1px solid #e2e8f0; justify-content: center; position: sticky; top: 0; z-index: 1000; }
-        .tab-btn { padding: 1rem 1.5rem; border: none; background: none; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.2s; }
-        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .nav-ribbon {
+            height: var(--nav-height); min-height: var(--nav-height);
+            background: var(--surface); border-bottom: 1px solid #334155;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; z-index: 2000;
+            flex-shrink: 0; gap: 20px;
+        }
 
-        /* Content Areas */
-        .tab-content { display: none; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
-        .tab-content.active { display: block; animation: slideUp 0.3s ease-out; }
+        .brand { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--accent); display: flex; align-items: center; gap: 8px; font-style: italic; transform: skewX(-5deg); flex-shrink: 0; white-space: nowrap; }
 
-        /* Forecast Cards */
-        .forecast-row { display: flex; gap: 1rem; overflow-x: auto; padding: 1rem 0; scroll-snap-type: x mandatory; }
-        .forecast-card { min-width: 160px; background: white; padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); scroll-snap-align: start; }
-        .forecast-card img { width: 64px; height: 64px; margin-bottom: 0.5rem; border-radius: 50%; background: #f8fafc; }
+        .search-container {
+            flex: 1; max-width: 400px; position: relative; display: flex; align-items: center;
+        }
+        .search-input {
+            width: 100%; background: var(--bg); border: 1px solid #334155; border-radius: 8px;
+            padding: 8px 12px 8px 35px; color: var(--text); font-family: 'Inter'; font-size: 0.85rem;
+            outline: none; transition: 0.2s;
+        }
+        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(77, 124, 255, 0.2); }
+        .search-icon { position: absolute; left: 12px; color: var(--text-dim); pointer-events: none; }
 
-        /* Data Grid */
-        .data-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
-        .data-card { background: white; padding: 2rem; border-radius: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-top: 4px solid var(--accent); }
-        .data-card h3 { margin: 0; color: #64748b; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .data-card p { font-size: 2rem; font-weight: 800; margin: 0.5rem 0 0; }
+        .nav-buttons { display: flex; gap: 8px; background: var(--bg); padding: 4px; border-radius: 8px; flex-shrink: 0; }
+        .nav-btn {
+            padding: 6px 16px; border: none; background: transparent; color: var(--text-dim);
+            font-weight: 700; font-size: 0.8rem; cursor: pointer; border-radius: 6px; transition: 0.2s;
+        }
+        .nav-btn.active { background: var(--surface); color: var(--accent); }
 
-        /* Map */
-        #map { height: 65vh; width: 100%; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .unit-toggle-container {
+            display: flex; background: var(--bg); padding: 2px; border-radius: 8px; border: 1px solid #334155; 
+            cursor: pointer; user-select: none; flex-shrink: 0;
+        }
+        .unit-choice { padding: 6px 14px; font-family: 'JetBrains Mono'; font-size: 0.7rem; font-weight: 800; border-radius: 6px; color: var(--text-dim); transition: 0.2s all; pointer-events: none; }
+        .unit-choice.active { background: var(--accent); color: white; }
 
-        /* Alerts */
-        .alert-box { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 6px solid #ccc; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .severity-Extreme { border-left-color: #7f1d1d; background: #fef2f2; }
-        .severity-Severe { border-left-color: #9a3412; background: #fff7ed; }
+        .location-bar {
+            height: var(--loc-height); min-height: var(--loc-height); background: #1e293b; border-bottom: 2px solid var(--accent);
+            padding: 0 1.5rem; display: flex; align-items: center; gap: 10px; font-size: 0.75rem; font-weight: 700; 
+            text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); flex-shrink: 0; overflow: hidden;
+        }
 
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        main { flex-grow: 1; position: relative; overflow: hidden; height: calc(100vh - var(--nav-height) - var(--loc-height)); }
+        .tab-content { display: none; height: 100%; width: 100%; overflow-y: auto; padding: 30px; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        #radar-tab.active { display: block; padding: 0; overflow: hidden; }
+
+        .dashboard-container { width: 100%; max-width: 900px; background: var(--surface); border-radius: 16px; border: 1px solid #334155; padding: 30px; margin: 0 auto 20px auto; }
+        .main-stats { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-top: 20px; }
+        .temp-display { font-size: 5rem; font-weight: 800; letter-spacing: -2px; line-height: 1; font-family: 'Orbitron'; }
+        .metric-card { background: var(--bg); padding: 15px; border-radius: 12px; border: 1px solid #334155; }
+        .metric-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 5px; display: block; }
+
+        .forecast-row { 
+            background: var(--surface); border: 1px solid #334155; border-radius: 12px; 
+            padding: 15px 25px; display: grid; grid-template-columns: 140px 60px 1fr 80px; 
+            align-items: center; margin-bottom: 10px;
+        }
+
+        #map { height: 100%; width: 100%; background: #0b0f1a; z-index: 1; }
+        .radar-overlay-sidebar {
+            position: absolute; top: 15px; right: 15px; width: 300px; max-height: calc(100% - 120px); 
+            background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px); border: 1px solid #334155; 
+            border-radius: 12px; z-index: 1000; display: flex; flex-direction: column;
+        }
+        .sidebar-header { padding: 12px; border-bottom: 1px solid #334155; font-family: 'Orbitron'; font-size: 0.65rem; color: var(--accent); }
+        .radar-controls-float { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; }
+        .radar-btn { padding: 10px 25px; background: var(--accent); color: white; border: none; border-radius: 50px; font-family: 'Orbitron'; cursor: pointer; font-size: 0.75rem; }
+
+        .alert-card { background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 10px; border-left: 4px solid var(--accent); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-<header>
-    <h1>Weather Command Center</h1>
+<nav class="nav-ribbon">
+    <div class="brand"><i data-lucide="zap" style="color:var(--warning)"></i>WEATHERNET</div>
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search City, State or Zip...">
-        <button class="btn-search" onclick="doSearch()">Search</button>
+        <i data-lucide="search" class="search-icon" style="width:16px;"></i>
+        <input type="text" id="location-search" class="search-input" placeholder="City, State or Zip Code..." onkeydown="if(event.key==='Enter') searchLocation()">
     </div>
-    <div id="locationLabel" style="font-size: 0.9rem; opacity: 0.8; margin-top: 10px;">Initializing...</div>
-</header>
-
-<nav>
-    <button class="tab-btn active" onclick="switchTab('quick', this)">Quick Display</button>
-    <button class="tab-btn" onclick="switchTab('forecast', this)">Forecasts</button>
-    <button class="tab-btn" onclick="switchTab('data', this)">Data</button>
-    <button class="tab-btn" onclick="switchTab('radar', this)">Radar</button>
+    <div class="nav-buttons">
+        <button class="nav-btn active" onclick="switchTab('quick-view', this)">Quick View</button>
+        <button class="nav-btn" onclick="switchTab('forecast', this)">Forecast</button>
+        <button class="nav-btn" onclick="switchTab('radar-tab', this)">Radar</button>
+    </div>
+    <div class="unit-toggle-container" onclick="toggleUnitSystem()">
+        <div id="choice-us" class="unit-choice active">US</div>
+        <div id="choice-si" class="unit-choice">SI</div>
+    </div>
 </nav>
 
+<div class="location-bar">
+    <i data-lucide="map-pin" style="width:14px; color:var(--accent)"></i>
+    LOCATION: <span id="global-city-display">Syncing...</span>
+</div>
+
 <main>
-    <section id="quick" class="tab-content active">
-        <h2 style="margin-top:0">Active Advisories</h2>
-        <div id="alertsList">Searching for NWS statements...</div>
+    <section id="quick-view" class="tab-content active">
+        <div class="dashboard-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px;">
+                <h2 style="margin:0; font-size: 1rem; text-transform: uppercase;">Current Conditions</h2>
+                <div id="station-display" style="font-family: 'JetBrains Mono'; font-size: 0.7rem; color: var(--accent);">WFO: --</div>
+            </div>
+            <div class="main-stats">
+                <div style="display: flex; align-items: center; gap: 25px;">
+                    <div id="weather-icon"><i data-lucide="cloud-sun" style="width: 70px; height: 70px; color: var(--warning);"></i></div>
+                    <div>
+                        <div class="temp-display" id="temp">--°</div>
+                        <div id="condition-desc" style="font-size: 1.2rem; color: var(--text-dim);">Scanning...</div>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div class="metric-card"><span class="metric-label">Wind</span><div id="wind">--</div></div>
+                    <div class="metric-card"><span class="metric-label">Humidity</span><div id="humidity">--%</div></div>
+                    <div class="metric-card"><span class="metric-label">Pressure</span><div id="pressure">--</div></div>
+                    <div class="metric-card"><span class="metric-label">Visibility</span><div id="vis-value">--</div></div>
+                </div>
+            </div>
+        </div>
+        <div id="local-alerts-list" style="max-width: 900px; margin: 0 auto;"></div>
     </section>
 
     <section id="forecast" class="tab-content">
-        <h2>7-Day Outlook</h2>
-        <div class="forecast-row" id="forecastGrid"></div>
+        <div id="forecast-grid" style="max-width: 850px; margin: 0 auto;"></div>
     </section>
 
-    <section id="data" class="tab-content">
-        <h2>Live Observations</h2>
-        <div class="data-grid">
-            <div class="data-card"><h3>Temperature</h3><p id="obs-temp">--</p></div>
-            <div class="data-card"><h3>Pressure</h3><p id="obs-baro">--</p></div>
-            <div class="data-card"><h3>Humidity</h3><p id="obs-hum">--</p></div>
-            <div class="data-card"><h3>Wind Speed</h3><p id="obs-wind">--</p></div>
-        </div>
-    </section>
-
-    <section id="radar" class="tab-content">
+    <section id="radar-tab" class="tab-content">
         <div id="map"></div>
-        <p style="font-size: 0.8rem; color: #64748b; margin-top: 10px;">
-            Click a state to zoom. Use the icon in the top-right to toggle Radar or Warning Areas.
-        </p>
+        <div class="radar-overlay-sidebar">
+            <div id="sidebar-header" class="sidebar-header">NATIONAL ANALYSIS</div>
+            <div style="overflow-y: auto; padding: 15px;" id="map-alerts-container"></div>
+        </div>
+        <div class="radar-controls-float">
+            <button class="radar-btn" id="radar-play-btn" onclick="toggleRadarLoop()">PLAY RADAR</button>
+        </div>
     </section>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-    // Configuration
-    let map, radarLayer, warningPolygons, stateLayer;
-    let lat = 38.89, lon = -77.03; // DC Default
-    const UA = "WeatherDashboardRestructured/3.0 (contact@example.com)";
+    let currentLat = 34.6059, currentLon = -86.9833;
+    let units = 'us'; 
+    let map, stateLayer, activeStateLayer = null, radarLayers = [], radarInterval = null, currentFrameIndex = 0;
+    let polygonLayer = L.layerGroup(); 
+    let weatherCache = null; 
 
-    // 1. TAB SYSTEM
-    function switchTab(id, btn) {
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-        btn.classList.add('active');
-        
-        // Critical Fix: Map needs redrawing if it was initialized while hidden
-        if(id === 'radar' && map) {
-            setTimeout(() => map.invalidateSize(), 100);
-        }
-    }
+    const UA = "WeatherNet_v26_TornadoPolygons";
+    const STATE_CODES = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
 
-    // 2. SEARCH & LOCATION
-    async function doSearch() {
-        const query = document.getElementById('searchInput').value;
-        if(!query) return;
-
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=us&limit=1`);
-            const data = await res.json();
-            if(data.length > 0) {
-                lat = data[0].lat;
-                lon = data[0].lon;
-                map.flyTo([lat, lon], 8);
-                refreshWeatherData();
-            } else {
-                alert("Location not found in the US.");
-            }
-        } catch(e) { console.error("Search Error:", e); }
-    }
-
-    // 3. WEATHER LOGIC (The Restructured Core)
-    async function refreshWeatherData() {
-        try {
-            const pointRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`, { headers: {"User-Agent": UA} });
-            const points = await pointRes.json();
-            
-            document.getElementById('locationLabel').innerText = `Station Context: ${points.properties.relativeLocation.properties.city}, ${points.properties.relativeLocation.properties.state}`;
-
-            // Execute all fetches in parallel for speed
-            await Promise.all([
-                fetchForecast(points.properties.forecast),
-                fetchObservations(points.properties.observationStations),
-                fetchAlerts(lat, lon),
-                updateMapWarnings()
-            ]);
-        } catch(e) {
-            console.error("Critical API Error:", e);
-            document.getElementById('locationLabel').innerText = "Error: NWS API currently unavailable.";
-        }
-    }
-
-    async function fetchForecast(url) {
-        try {
-            const res = await fetch(url, { headers: {"User-Agent": UA} });
-            const data = await res.json();
-            const grid = document.getElementById('forecastGrid');
-            grid.innerHTML = data.properties.periods.map(p => `
-                <div class="forecast-card">
-                    <div style="font-weight:600; font-size:0.8rem; margin-bottom:10px;">${p.name}</div>
-                    <img src="${p.icon}" alt="weather icon">
-                    <div style="font-size:1.5rem; font-weight:800;">${p.temperature}°${p.temperatureUnit}</div>
-                    <div style="font-size:0.7rem; color:#64748b; margin-top:5px;">${p.shortForecast}</div>
-                </div>
-            `).join('');
-        } catch(e) { console.error("Forecast Error:", e); }
-    }
-
-    async function fetchObservations(stationsUrl) {
-        try {
-            const res = await fetch(stationsUrl, { headers: {"User-Agent": UA} });
-            const data = await res.json();
-            
-            // Loop through up to 5 stations until we find one with valid data
-            for(let i=0; i < Math.min(data.features.length, 5); i++) {
-                const obsRes = await fetch(`${data.features[i].id}/observations/latest`, { headers: {"User-Agent": UA} });
-                if(!obsRes.ok) continue;
-                
-                const obs = await obsRes.json();
-                const p = obs.properties;
-                
-                // If the station has temperature, we consider it "functional"
-                if(p.temperature.value !== null) {
-                    const tempF = (p.temperature.value * 9/5) + 32;
-                    const baroIn = p.barometricPressure.value ? (p.barometricPressure.value * 0.0002953).toFixed(2) : "N/A";
-                    
-                    document.getElementById('obs-temp').innerText = `${tempF.toFixed(1)}°F`;
-                    document.getElementById('obs-baro').innerText = baroIn !== "N/A" ? `${baroIn} inHg` : "--";
-                    document.getElementById('obs-hum').innerText = p.relativeHumidity.value ? `${p.relativeHumidity.value.toFixed(0)}%` : "--";
-                    document.getElementById('obs-wind').innerText = p.windSpeed.value ? `${p.windSpeed.value.toFixed(1)} mph` : "Calm";
-                    return; // Found data, exit loop
-                }
-            }
-        } catch(e) { console.error("Observations Error:", e); }
-    }
-
-    async function fetchAlerts(la, lo) {
-        try {
-            const res = await fetch(`https://api.weather.gov/alerts/active?point=${la},${lo}`, { headers: {"User-Agent": UA} });
-            const data = await res.json();
-            const list = document.getElementById('alertsList');
-            
-            list.innerHTML = data.features.length > 0 ? data.features.map(f => `
-                <div class="alert-box severity-${f.properties.severity}">
-                    <strong>${f.properties.event}</strong><br>
-                    <span style="font-size:0.85rem">${f.properties.headline}</span>
-                </div>
-            `).join('') : "<p>No active alerts for this area.</p>";
-        } catch(e) { console.error("Alerts Error:", e); }
-    }
-
-    // 4. MAP SETUP
-    function initMap() {
-        map = L.map('map').setView([37.8, -96], 4);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
-
-        radarLayer = L.tileLayer.wms("https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/wms", {
-            layers: 'conus_bref_qcd', format: 'image/png', transparent: true, opacity: 0.6
-        });
-
-        warningPolygons = L.layerGroup();
-
-        // Control Panel
-        const overlays = { "Live Radar": radarLayer.addTo(map), "Active Warning Areas": warningPolygons.addTo(map) };
-        L.control.layers(null, overlays).addTo(map);
-
-        // State Highlighting
-        fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
-            .then(r => r.json()).then(data => {
-                stateLayer = L.geoJson(data, {
-                    style: { color: '#64748b', weight: 1, fillOpacity: 0.05 },
-                    onEachFeature: (f, l) => {
-                        l.on('click', (e) => {
-                            map.fitBounds(l.getBounds());
-                            L.DomEvent.stopPropagation(e);
-                        });
-                    }
-                }).addTo(map);
-            });
-    }
-
-    async function updateMapWarnings() {
-        if(!warningPolygons) return;
-        warningPolygons.clearLayers();
-        try {
-            const res = await fetch(`https://api.weather.gov/alerts/active?region_type=land`, { headers: {"User-Agent": UA} });
-            const data = await res.json();
-            L.geoJson(data, {
-                style: (f) => ({
-                    color: f.properties.severity === 'Extreme' ? '#7f1d1d' : '#9a3412',
-                    fillOpacity: 0.3, weight: 2
-                }),
-                onEachFeature: (f, l) => {
-                    l.bindPopup(`<b>${f.properties.event}</b><br>${f.properties.headline}`);
-                }
-            }).addTo(warningPolygons);
-        } catch(e) { console.error("Map Warning Update Error:", e); }
-    }
-
-    // Launch
     window.onload = () => {
         initMap();
-        refreshWeatherData();
+        getWeatherData();
+        lucide.createIcons();
     };
+
+    async function searchLocation() {
+        const query = document.getElementById('location-search').value;
+        if (!query) return;
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us&limit=1`);
+            const data = await res.json();
+            if (data.length > 0) {
+                currentLat = parseFloat(data[0].lat);
+                currentLon = parseFloat(data[0].lon);
+                getWeatherData();
+                if (map) map.setView([currentLat, currentLon], 9);
+                document.getElementById('location-search').value = "";
+                document.getElementById('location-search').blur();
+            } else { alert("Location not found."); }
+        } catch (e) { console.error(e); }
+    }
+
+    function toggleUnitSystem() {
+        units = (units === 'us') ? 'si' : 'us';
+        document.getElementById('choice-us').classList.toggle('active', units === 'us');
+        document.getElementById('choice-si').classList.toggle('active', units === 'si');
+        if (weatherCache) renderWeather(weatherCache); 
+    }
+
+    function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        btn.classList.add('active');
+        if (tabId === 'radar-tab' && map) setTimeout(() => map.invalidateSize(), 100);
+    }
+
+    function initMap() {
+        map = L.map('map', { zoomControl: false, attributionControl: false }).setView([37.8, -96], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        polygonLayer.addTo(map);
+        fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
+        .then(r => r.json()).then(data => {
+            stateLayer = L.geoJson(data, {
+                style: { color:'#4d7cff', weight:1, fillOpacity:0.05 },
+                onEachFeature: (f,l) => {
+                    l.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        if (activeStateLayer === l) { resetMap(); } 
+                        else {
+                            stateLayer.setStyle({ color:'#4d7cff', weight:1, fillOpacity:0.05 });
+                            l.setStyle({ color:'var(--warning)', weight:3, fillOpacity:0.2 });
+                            activeStateLayer = l;
+                            map.fitBounds(l.getBounds());
+                            fetchMapAlerts(f.properties.name);
+                        }
+                    });
+                }
+            }).addTo(map);
+        });
+        loadRadar();
+        fetchNationalPolygons();
+    }
+
+    function resetMap() {
+        stateLayer.setStyle({ color:'#4d7cff', weight:1, fillOpacity:0.05 });
+        activeStateLayer = null;
+        map.setView([37.8, -96], 4);
+        document.getElementById('sidebar-header').innerText = "NATIONAL ANALYSIS";
+        document.getElementById('map-alerts-container').innerHTML = "";
+    }
+
+    async function getWeatherData() {
+        try {
+            const p = await (await fetch(`https://api.weather.gov/points/${currentLat.toFixed(4)},${currentLon.toFixed(4)}`, { headers: {'User-Agent': UA} })).json();
+            const fData = await (await fetch(p.properties.forecast, { headers: {'User-Agent': UA} })).json();
+            const obsData = await (await fetch(p.properties.observationStations, { headers: {'User-Agent': UA} })).json();
+            const latest = await (await fetch(`${obsData.features[0].id}/observations/latest`, { headers: {'User-Agent': UA} })).json();
+            weatherCache = { point: p, forecast: fData, obs: latest.properties };
+            renderWeather(weatherCache);
+        } catch (e) { console.error(e); }
+    }
+
+    function renderWeather(data) {
+        const p = data.point;
+        const periods = data.forecast.properties.periods;
+        const obs = data.obs;
+        const toC = (f) => Math.round((f - 32) * 5 / 9);
+        const toKph = (speedStr) => {
+            let val = parseInt(speedStr);
+            return isNaN(val) ? speedStr : Math.round(val * 1.60934) + " km/h";
+        };
+        document.getElementById('global-city-display').innerText = `${p.properties.relativeLocation.properties.city}, ${p.properties.relativeLocation.properties.state}`;
+        document.getElementById('station-display').innerText = `WFO: ${p.properties.gridId}`;
+        const mainTemp = periods[0].temperature;
+        document.getElementById('temp').innerText = units === 'us' ? `${mainTemp}°` : `${toC(mainTemp)}°`;
+        document.getElementById('condition-desc').innerText = periods[0].shortForecast;
+        document.getElementById('wind').innerText = units === 'us' ? `${periods[0].windSpeed} ${periods[0].windDirection}` : `${toKph(periods[0].windSpeed)} ${periods[0].windDirection}`;
+        document.getElementById('humidity').innerText = obs.relativeHumidity.value ? Math.round(obs.relativeHumidity.value) + "%" : "N/A";
+        const inhg = (obs.barometricPressure.value * 0.0002953).toFixed(2);
+        const hpa = (obs.barometricPressure.value / 100).toFixed(1);
+        document.getElementById('pressure').innerText = units === 'us' ? `${inhg} in` : `${hpa} hPa`;
+        const mi = (obs.visibility.value / 1609.34).toFixed(1);
+        const km = (obs.visibility.value / 1000).toFixed(1);
+        document.getElementById('vis-value').innerText = units === 'us' ? `${mi} mi` : `${km} km`;
+        document.getElementById('forecast-grid').innerHTML = periods.map(per => {
+            const dispTemp = units === 'us' ? per.temperature : toC(per.temperature);
+            return `<div class="forecast-row"><div>${per.name}</div><div><i data-lucide="${getIconName(per.shortForecast)}" style="color:${per.isDaytime?'var(--warning)':'var(--text-dim)'}"></i></div><div style="color:var(--text-dim); font-size:0.9rem;">${per.shortForecast}</div><div style="font-family:'Orbitron'; font-weight:800; text-align:right;">${dispTemp}°</div></div>`;
+        }).join('');
+        lucide.createIcons();
+        fetchLocalAlerts(p.properties.relativeLocation.properties.state);
+    }
+
+    async function loadRadar() {
+        const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+        const data = await res.json();
+        radarLayers = data.radar.past.map(f => L.tileLayer(`https://tilecache.rainviewer.com${f.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, zIndex: 500 }).addTo(map));
+        if (radarLayers.length > 0) radarLayers[radarLayers.length-1].setOpacity(0.7);
+    }
+
+    function toggleRadarLoop() {
+        const btn = document.getElementById("radar-play-btn");
+        if (radarInterval) {
+            clearInterval(radarInterval); radarInterval = null; btn.innerText = "PLAY RADAR";
+            radarLayers.forEach(l => l.setOpacity(0)); radarLayers[radarLayers.length - 1].setOpacity(0.7);
+        } else {
+            btn.innerText = "STOP RADAR";
+            radarInterval = setInterval(() => {
+                radarLayers.forEach(l => l.setOpacity(0));
+                currentFrameIndex = (currentFrameIndex + 1) % radarLayers.length;
+                radarLayers[currentFrameIndex].setOpacity(0.7);
+            }, 600);
+        }
+    }
+
+    async function fetchNationalPolygons() {
+        const res = await fetch(`https://api.weather.gov/alerts/active`, { headers: {'User-Agent': UA} });
+        const data = await res.json();
+        polygonLayer.clearLayers();
+        
+        // Priority rendering: Tornadoes last (top)
+        const sorted = data.features.sort((a, b) => {
+            const aT = a.properties.event.toLowerCase().includes('tornado') ? 1 : 0;
+            const bT = b.properties.event.toLowerCase().includes('tornado') ? 1 : 0;
+            return aT - bT;
+        });
+
+        sorted.forEach(f => {
+            if (f.geometry && f.geometry.coordinates) {
+                const clr = getNWSColor(f.properties.event);
+                const isTornado = f.properties.event.toLowerCase().includes('tornado');
+                L.geoJSON(f, { 
+                    style: { 
+                        color: clr, 
+                        weight: isTornado ? 5 : 2, 
+                        opacity: 1, 
+                        fillOpacity: isTornado ? 0.4 : 0.2, 
+                        fillColor: clr 
+                    }, interactive: false 
+                }).addTo(polygonLayer);
+            }
+        });
+    }
+
+    async function fetchLocalAlerts(state) {
+        const res = await fetch(`https://api.weather.gov/alerts/active?area=${state}`, { headers: {'User-Agent': UA} });
+        const data = await res.json();
+        document.getElementById('local-alerts-list').innerHTML = data.features.map(f => {
+            const clr = getNWSColor(f.properties.event);
+            return `<div class="alert-card" style="border-left-color: ${clr}"><div style="font-family: 'Orbitron'; font-size: 0.8rem; font-weight: 800; color: ${clr}; margin-bottom: 4px;">${f.properties.event.toUpperCase()}</div><div style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.4;">${f.properties.headline}</div></div>`;
+        }).join('') || '<div style="text-align:center; color:var(--text-dim)">Local clear.</div>';
+    }
+
+    async function fetchMapAlerts(sName) {
+        const code = STATE_CODES[sName];
+        document.getElementById('sidebar-header').innerText = sName.toUpperCase();
+        const res = await fetch(`https://api.weather.gov/alerts/active?area=${code}`, { headers: {'User-Agent': UA} });
+        const data = await res.json();
+        document.getElementById('map-alerts-container').innerHTML = data.features.map(f => {
+            const clr = getNWSColor(f.properties.event);
+            return `<div class="alert-card" style="font-size:0.7rem; border-left-color: ${clr}"><strong style="color:${clr}">${f.properties.event}</strong><div style="font-size:0.65rem; color:var(--text-dim); margin-top:5px;">${f.properties.headline.substring(0, 80)}...</div></div>`;
+        }).join('') || "No active threats.";
+    }
+
+    function getNWSColor(event) {
+        const e = event.toLowerCase();
+        if (e.includes("tornado")) return "var(--nws-tornado)";
+        if (e.includes("thunderstorm")) return "var(--nws-severe-tstorm)";
+        if (e.includes("flood")) return "var(--nws-flood)";
+        return "var(--accent)";
+    }
+
+    function getIconName(desc) {
+        const d = desc.toLowerCase();
+        if (d.includes("sun") || d.includes("clear")) return "sun";
+        if (d.includes("rain") || d.includes("shower")) return "cloud-rain";
+        if (d.includes("t-storm") || d.includes("lightning")) return "cloud-lightning";
+        return "cloud";
+    }
 </script>
 </body>
 </html>
