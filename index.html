@@ -177,147 +177,110 @@
     let map, stateLayer, activeStateLayer = null, radarLayers = [], timestamps = [], radarInterval = null, currentFrameIndex = 0;
     const hazardGroups = { severe: L.layerGroup(), flood: L.layerGroup(), marine: L.layerGroup() };
     let weatherCache = null, locationMarker;
-    const UA = "WeatherNet_v38.9_GitHub_Edition";
+    const UA = "WeatherNet_v38.9_GitHub_Stable";
 
-    const STATE_CODES = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
+    const STATE_CODES = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","NV":"Nevada","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
 
     window.onload = () => { initMap(); getWeatherData(); lucide.createIcons(); };
 
     function initMap() {
         map = L.map('map', { zoomControl: false, attributionControl: true, minZoom: 3 }).setView([38, -97], 4);
-        
-        // Robust Base Layer
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap &copy; CARTO'
         }).addTo(map);
-
         Object.values(hazardGroups).forEach(g => g.addTo(map));
-        
-        locationMarker = L.circleMarker([currentLat, currentLon], { 
-            radius: 8, fillColor: "#4d7cff", color: "#fff", weight: 2, fillOpacity: 1 
-        }).addTo(map);
-
-        fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
-            .then(r => r.json())
-            .then(data => {
-                stateLayer = L.geoJson(data, {
-                    style: { color:'#4d7cff', weight:1, fillOpacity:0.05 },
-                    onEachFeature: (f, l) => {
-                        l.on('click', (e) => {
-                            L.DomEvent.stopPropagation(e);
-                            if (activeStateLayer === l) { resetMap(); } else {
-                                stateLayer.setStyle({ color:'#4d7cff', weight:1, fillOpacity:0.05 });
-                                l.setStyle({ color:'var(--warning)', weight:3, fillOpacity:0.2 });
-                                activeStateLayer = l; map.fitBounds(l.getBounds()); fetchMapAlerts(f.properties.name);
-                            }
-                        });
-                    }
-                }).addTo(map);
-            }).catch(e => console.warn("GeoJSON fail:", e));
-
-        loadRadar(); 
-        fetchGlobalHazards();
+        locationMarker = L.circleMarker([currentLat, currentLon], { radius: 8, fillColor: "#4d7cff", color: "#fff", weight: 2, fillOpacity: 1 }).addTo(map);
+        fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json').then(r => r.json()).then(data => {
+            stateLayer = L.geoJson(data, {
+                style: { color:'#4d7cff', weight:1, fillOpacity:0.05 },
+                onEachFeature: (f, l) => {
+                    l.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        if (activeStateLayer === l) { resetMap(); } else {
+                            stateLayer.setStyle({ color:'#4d7cff', weight:1, fillOpacity:0.05 });
+                            l.setStyle({ color:'var(--warning)', weight:3, fillOpacity:0.2 });
+                            activeStateLayer = l; map.fitBounds(l.getBounds()); fetchMapAlerts(f.properties.name);
+                        }
+                    });
+                }
+            }).addTo(map);
+        });
+        loadRadar(); fetchGlobalHazards();
     }
 
-    // Robust Radar Loader with tile management
     async function loadRadar() {
         try {
             const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
             const data = await res.json();
             const frames = data.radar.past;
-            
-            // Clean up old layers if they exist (prevents memory leak on refresh)
             radarLayers.forEach(l => map.removeLayer(l));
-            
             timestamps = frames.map(f => f.time);
             radarLayers = frames.map(f => {
                 return L.tileLayer(`https://tilecache.rainviewer.com${f.path}/256/{z}/{x}/{y}/2/1_1.png`, {
                     opacity: 0,
                     zIndex: 500,
                     tileSize: 256,
-                    updateWhenIdle: true
+                    updateWhenIdle: true,
+                    // PREVENTS RADAR DISAPPEARING ON ZOOM
+                    maxNativeZoom: 12, 
+                    maxZoom: 18,
+                    attribution: 'RainViewer'
                 }).addTo(map);
             });
-
             document.getElementById('radar-progress').max = radarLayers.length - 1;
             document.getElementById('start-time').innerText = new Date(timestamps[0]*1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             document.getElementById('end-time').innerText = new Date(timestamps[timestamps.length-1]*1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            
             updateFrame(radarLayers.length - 1);
         } catch (e) {
-            console.error("Radar API unavailable", e);
+            console.error("Radar Fail", e);
             document.getElementById('current-time').innerText = "RADAR OFFLINE";
         }
     }
 
     function updateFrame(idx) {
         currentFrameIndex = idx;
-        radarLayers.forEach((l, i) => {
-            if (i === idx) {
-                l.setOpacity(0.7);
-            } else {
-                l.setOpacity(0);
-            }
-        });
+        radarLayers.forEach((l, i) => l.setOpacity(i == idx ? 0.7 : 0));
         document.getElementById('current-time').innerText = new Date(timestamps[idx]*1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         document.getElementById('radar-progress').value = idx;
     }
 
     function toggleRadarLoop() {
         const icon = document.getElementById('play-icon');
-        if (radarInterval) { 
-            clearInterval(radarInterval); 
-            radarInterval = null; 
-            icon.setAttribute('data-lucide', 'play'); 
-        } else {
+        if (radarInterval) { clearInterval(radarInterval); radarInterval = null; icon.setAttribute('data-lucide', 'play'); } 
+        else {
             icon.setAttribute('data-lucide', 'pause');
-            radarInterval = setInterval(() => { 
-                currentFrameIndex = (currentFrameIndex + 1) % radarLayers.length; 
-                updateFrame(currentFrameIndex); 
-            }, 600);
+            radarInterval = setInterval(() => { currentFrameIndex = (currentFrameIndex + 1) % radarLayers.length; updateFrame(currentFrameIndex); }, 600);
         }
         lucide.createIcons();
     }
 
-    function manualSeek(val) { 
-        if (radarInterval) toggleRadarLoop(); 
-        updateFrame(parseInt(val)); 
-    }
+    function manualSeek(val) { if (radarInterval) toggleRadarLoop(); updateFrame(parseInt(val)); }
 
     async function fetchGlobalHazards() {
         try {
             const res = await fetch(`https://api.weather.gov/alerts/active`, { headers: {'User-Agent': UA} });
             const data = await res.json();
             let counts = { tor: 0, svr: 0, ffw: 0 };
-            
             data.features.forEach(f => {
                 if (!f.geometry) return;
                 const ev = f.properties.event;
                 if (ev.includes("Tornado")) counts.tor++;
                 if (ev.includes("Thunderstorm")) counts.svr++;
                 if (ev.includes("Flash Flood")) counts.ffw++;
-                
                 let cat = ev.toLowerCase().includes('flood') ? 'flood' : (ev.toLowerCase().includes('marine') ? 'marine' : 'severe');
-                
                 L.geoJSON(f, { 
                     style: { color: getNWSColor(ev), weight: 2, fillOpacity: 0.2, fillColor: getNWSColor(ev) },
                     onEachFeature: (feature, layer) => {
                         layer.bindPopup(`<strong>${feature.properties.event}</strong><br>${feature.properties.headline}`);
-                        layer.on('mouseover', function() { 
-                            this.setStyle({ fillOpacity: 0.5 }); 
-                            this.openPopup();
-                        });
-                        layer.on('mouseout', function() { 
-                            this.setStyle({ fillOpacity: 0.2 }); 
-                            this.closePopup();
-                        });
+                        layer.on('mouseover', function() { this.setStyle({ fillOpacity: 0.5 }); this.openPopup(); });
+                        layer.on('mouseout', function() { this.setStyle({ fillOpacity: 0.2 }); this.closePopup(); });
                     }
                 }).addTo(hazardGroups[cat]);
             });
             document.getElementById('count-tor').innerText = counts.tor;
             document.getElementById('count-svr').innerText = counts.svr;
             document.getElementById('count-ffw').innerText = counts.ffw;
-        } catch(e) { console.warn("NWS Alerts Down"); }
+        } catch(e) { console.warn("Hazards fail"); }
     }
 
     function toggleHazardLayer(cat) {
@@ -333,9 +296,8 @@
             const obsData = await (await fetch(p.properties.observationStations, { headers: {'User-Agent': UA} })).json();
             const latest = await (await fetch(`${obsData.features[0].id}/observations/latest`, { headers: {'User-Agent': UA} })).json();
             weatherCache = { point: p, forecast: fData, obs: latest.properties };
-            renderWeather(); 
-            fetchLightningNearby(currentLat, currentLon);
-        } catch (e) { console.error("Weather Sync Error"); }
+            renderWeather(); fetchLightningNearby(currentLat, currentLon);
+        } catch (e) { console.error("Weather data sync issue"); }
     }
 
     function renderWeather() {
@@ -343,13 +305,11 @@
         const p = weatherCache.point; const periods = weatherCache.forecast.properties.periods; const obs = weatherCache.obs;
         const toC = (f) => Math.round((f - 32) * 5 / 9);
         const toKph = (m) => Math.round(parseInt(m) * 1.609);
-
         document.getElementById('lightning-unit-label').innerText = units === 'us' ? '30mi' : '48km';
         document.getElementById('global-city-display').innerText = `${p.properties.relativeLocation.properties.city}, ${p.properties.relativeLocation.properties.state}`;
         document.getElementById('station-display').innerText = `WFO: ${p.properties.gridId}`;
         document.getElementById('temp').innerText = units === 'us' ? `${periods[0].temperature}°` : `${toC(periods[0].temperature)}°`;
         document.getElementById('condition-desc').innerText = periods[0].shortForecast;
-        
         if (units === 'us') {
             document.getElementById('wind').innerText = periods[0].windSpeed;
             document.getElementById('pressure').innerText = (obs.barometricPressure.value * 0.0002953).toFixed(2) + " in";
@@ -416,7 +376,6 @@
         const st = document.getElementById('lightning-status');
         const icon = document.getElementById('lightning-icon');
         const activeStorms = data.features.filter(f => f.properties.event.toLowerCase().includes('thunderstorm'));
-
         if (activeStorms.length > 0) {
             st.innerText = "STORM NEARBY";
             st.style.color = "var(--warning)";
@@ -434,13 +393,10 @@
         const input = document.getElementById('location-search');
         const q = input.value.trim();
         if (!q) return;
-
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&limit=1`;
-        
         try {
             const res = await fetch(url, { headers: { 'User-Agent': UA } });
             const data = await res.json();
-            
             if (data && data[0]) {
                 currentLat = parseFloat(data[0].lat); 
                 currentLon = parseFloat(data[0].lon);
